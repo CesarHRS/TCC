@@ -52,7 +52,7 @@ size_t calculate_fitness(const DynBits &v) {
 }
 
 int main(int argc, char **argv) {
-    std::cout << "Iniciando simulação..." << std::endl;
+    //std::cout << "Iniciando simulação..." << std::endl;
 
     std::random_device rd;
     std::mt19937_64 rng(rd());
@@ -71,7 +71,7 @@ int main(int argc, char **argv) {
     size_t current_fitness = calculate_fitness(current_solution);
     size_t best_fitness = current_fitness;
 
-    std::cout << "Iniciando busca..." << std::endl;
+    //std::cout << "Iniciando busca..." << std::endl;
 
     auto start_time = std::chrono::high_resolution_clock::now();
     uint64_t iterations = 0;
@@ -96,11 +96,10 @@ int main(int argc, char **argv) {
     }
 
     auto end_time = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double> elapsed = end_time - start_time;
-
-    std::cout << "Solução ótima encontrada: " << best_solution.to_string(N_BITS) << std::endl;
-    std::cout << "Aptidão final: " << best_fitness << std::endl;
-    std::cout << "Iterações: " << iterations << std::endl;
+std::chrono::duration<double, std::milli> elapsed = end_time - start_time;
+    //std::cout << "Solução ótima encontrada: " << best_solution.to_string(N_BITS) << std::endl;
+    //std::cout << "Aptidão final: " << best_fitness << std::endl;
+    //std::cout << "Iterações: " << iterations << std::endl;
     std::cout << "Tempo (s): " << elapsed.count() << std::endl;
 
     return 0;
