@@ -1,7 +1,6 @@
-# Size in bits (override on make command line):
-BITS ?= 1024
+bits ?= 1024
+BITS = $(bits)
 
-# Verilog settings
 VERILOG_DIR := verilog
 TB_SRC := $(VERILOG_DIR)/one_max_tb.sv
 SV_SRCS := $(VERILOG_DIR)/display.sv \
@@ -18,11 +17,14 @@ VVP ?= vvp
 GTKWAVE ?= gtkwave
 IVERILOG_FLAGS ?= -g2012
 
-# C++ settings
 CXX ?= g++
 CXXFLAGS ?= -O3 -std=c++17 -march=native -Wall -Wextra -pipe
-CPP_SRC := cpp/main.cpp
-CPP_BIN := $(BUILD)/onemax_$(BITS)
+ifdef threads
+CXXFLAGS += -DUSE_THREADS -DNUM_THREADS=$(THREADS)
+endif
+THREADS := $(if $(threads),$(if $(filter 1 yes on true,$(threads)),$(shell nproc),$(threads)),1)
+CPP_SRC := cpp/main.cpp cpp/dynbits.cpp cpp/hill_climbing.cpp
+CPP_BIN := $(BUILD)/onemax_$(THREADS)_$(BITS)
 
 .PHONY: all verilog cpp sim wave run clean help
 all: help
@@ -30,7 +32,6 @@ all: help
 $(BUILD):
 	@mkdir -p $(BUILD)
 
-# Copia o testbench para o build (sed mantido para compatibilidade futura)
 $(TB_BUILD): $(TB_SRC) | $(BUILD)
 	@echo "[make] Generating testbench with N_BITS=$(BITS)"
 	@cp $(TB_SRC) $@
@@ -43,14 +44,23 @@ verilog: $(SIMV)
 	@echo "[make] Running Verilog simulation (output/log in $(BUILD)/)"
 	$(VVP) $(SIMV) | tee $(BUILD)/sim_$(BITS).out
 
-# Build C++ binary with BITS as compile-time macro
 $(CPP_BIN): $(CPP_SRC) | $(BUILD)
-	@echo "[make] Compiling C++ solver with BITS=$(BITS)"
-	$(CXX) $(CXXFLAGS) -DBITS=$(BITS) -o $@ $(CPP_SRC)
+	@echo "[make] Compiling C++ solver with bits=$(bits)"
+	$(CXX) $(CXXFLAGS) -DBITS=$(bits) -o $@ $(CPP_SRC)
 
 cpp: $(CPP_BIN)
-	@echo "[make] Running C++ solver (BITS=$(BITS))"
-	$(CPP_BIN) | tee $(BUILD)/cpp_sim_$(BITS).out
+	@echo "[make] Running C++ solver (bits=$(bits), THREADS=$(THREADS)) 10 times"
+	@echo "=========================================" > $(BUILD)/cpp_$(THREADS)_$(bits).out
+	@if [ $(THREADS) -eq 1 ]; then \
+		echo "Teste: BITS=$(bits), MODE=SINGLE-CORE" >> $(BUILD)/cpp_$(THREADS)_$(bits).out; \
+	else \
+		echo "Teste: BITS=$(bits), MODE=MULTI-CORE ($(THREADS) threads)" >> $(BUILD)/cpp_$(THREADS)_$(bits).out; \
+	fi
+	@echo "=========================================" >> $(BUILD)/cpp_$(THREADS)_$(bits).out
+	@for i in 1 2 3 4 5 6 7 8 9 10; do \
+		echo "Run $$i:"; \
+		$(CPP_BIN); \
+	done | tee -a $(BUILD)/cpp_$(THREADS)_$(bits).out | awk '/Tempo/ {sum += $$3; count++} END {if (count > 0) print "=========================================\nMédia:", sum/count, "µs\n========================================="}' >> $(BUILD)/cpp_$(THREADS)_$(bits).out
 
 run: verilog
 
@@ -78,6 +88,8 @@ clean:
 help:
 	@echo "Makefile targets:"
 	@echo "  make verilog BITS=<n>  : compile+run SystemVerilog testbench"
-	@echo "  make cpp BITS=<n>      : compile+run C++ solver"
+	@echo "  make cpp bits=<n>      : compile+run C++ solver (single-core)"
+	@echo "  make cpp bits=<n> threads=1  : compile+run C++ solver (multi-core with all cores)"
+	@echo "  make cpp bits=<n> threads=<num> : compile+run C++ solver (with <num> threads)"
 	@echo "  make wave BITS=<n>     : run verilog and open VCD with gtkwave"
 	@echo "  make clean             : remove build directory"
