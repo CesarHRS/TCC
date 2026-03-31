@@ -4,6 +4,6 @@
 #include "dynbits.h"
 
 size_t calculate_fitness(const DynBits &v);
-DynBits run_hill_climbing(size_t seed);
+DynBits run_hill_climbing();
 
 #endif // HILL_CLIMBING_H

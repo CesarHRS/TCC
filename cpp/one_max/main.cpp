@@ -6,7 +6,6 @@
 #include <mutex>
 #include "dynbits.h"
 #include "hill_climbing.h"
-#include <random>
 
 int main(int argc, char **argv) {
 #ifdef USE_THREADS
@@ -28,9 +27,7 @@ int main(int argc, char **argv) {
     std::mutex results_mutex;
 
     auto worker = [&](size_t thread_id) {
-        std::random_device rd;
-        size_t seed = rd();
-        DynBits best = run_hill_climbing(seed);
+        DynBits best = run_hill_climbing();
         std::lock_guard<std::mutex> lock(results_mutex);
         results[thread_id] = best;
     };
@@ -61,10 +58,8 @@ int main(int argc, char **argv) {
 
     std::cout << "Tempo = " << elapsed.count() << " µs" << std::endl;
 #else
-    std::random_device rd;
-    size_t seed = rd();
     auto start_time = std::chrono::high_resolution_clock::now();
-    DynBits best = run_hill_climbing(seed);
+    DynBits best = run_hill_climbing();
     auto end_time = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double, std::micro> elapsed = end_time - start_time;
     std::cout << "Tempo = " << elapsed.count() << " µs" << std::endl;
