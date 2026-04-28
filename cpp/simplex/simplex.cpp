@@ -67,7 +67,7 @@ bool pivot(Table &tab, std::array<int, M> &basis) {
     }
 
     if (leaving == -1) {
-        throw std::runtime_error("Problema não limitado (unbounded)");
+        throw std::runtime_error("Problema não limitado ");
     }
 
     double pivot_val = tab[leaving][entering];
@@ -87,11 +87,9 @@ bool pivot(Table &tab, std::array<int, M> &basis) {
     return true;
 }
 
-bool simplex_solve(const std::array<std::array<double, N>, M> &A,
-                   const std::array<double, M> &b,
-                   const std::array<double, N> &c,
-                   std::array<double, N> &x,
-                   double &objective) {
+bool simplex_solve(const std::array<std::array<double, N>, M> &A, const std::array<double, M> &b,
+                   const std::array<double, N> &c, std::array<double, N> &x, double &objective) {
+                    
     Table tab{};
     std::array<int, M> basis{};
 

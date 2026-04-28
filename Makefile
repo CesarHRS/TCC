@@ -19,6 +19,16 @@ VVP ?= vvp
 GTKWAVE ?= gtkwave
 IVERILOG_FLAGS ?= -g2012
 
+# Verilog N-Queens
+VERILOG_N_QUEENS_DIR := $(VERILOG_DIR)/n_queens
+N_QUEENS_TB_SRC := $(VERILOG_N_QUEENS_DIR)/n_queens_tb.sv
+N_QUEENS_SV_SRCS := $(VERILOG_N_QUEENS_DIR)/lfsr64.sv \
+                    $(VERILOG_N_QUEENS_DIR)/n_queens.sv
+
+N_QUEENS_TOP := n_queens_tb
+N_QUEENS_SIMV := $(BUILD)/$(N_QUEENS_TOP)_$(N_QUEENS_SIZE).vvp
+N_QUEENS_VCD := $(BUILD)/n_queens_dump_$(N_QUEENS_SIZE).vcd
+
 CXX ?= g++
 CXXFLAGS ?= -O3 -std=c++17 -march=native -Wall -Wextra -pipe
 ifdef threads
@@ -38,7 +48,19 @@ SIMPLEX_N := $(simplex_n)
 SIMPLEX_CPP_SRC := cpp/simplex/simplex.cpp
 SIMPLEX_CPP_BIN := $(BUILD)/simplex_$(SIMPLEX_M)x$(SIMPLEX_N)
 
-.PHONY: all verilog one_max simplex sim wave run clean help
+# N-Queens C++
+n_queens_size ?= 8
+N_QUEENS_SIZE := $(n_queens_size)
+N_QUEENS_CPP_SRC := cpp/n_queens/main.cpp
+N_QUEENS_CPP_BIN := $(BUILD)/nqueens_$(N_QUEENS_SIZE)
+
+# N-Queens C++
+n_queens_size ?= 8
+N_QUEENS_SIZE := $(n_queens_size)
+N_QUEENS_CPP_SRC := cpp/n_queens/main.cpp
+N_QUEENS_CPP_BIN := $(BUILD)/nqueens_$(N_QUEENS_SIZE)
+
+.PHONY: all verilog one_max simplex n_queens sim wave run clean help
 all: help
 
 $(BUILD):
@@ -88,6 +110,22 @@ simplex: $(SIMPLEX_CPP_BIN)
 		$(SIMPLEX_CPP_BIN); \
 	done | tee -a $(BUILD)/simplex_$(SIMPLEX_M)x$(SIMPLEX_N).out | awk '/Tempo/ {for (j=1; j<=NF; j++) if ($$j == "=") {sum += $$(j+1); count++; break}} END {if (count > 0) print "=========================================\nMédia:", sum/count, "µs\n========================================="}' >> $(BUILD)/simplex_$(SIMPLEX_M)x$(SIMPLEX_N).out
 
+$(N_QUEENS_CPP_BIN): $(N_QUEENS_CPP_SRC) | $(BUILD)
+	@echo "[make] Compiling N-Queens Min-Conflicts solver (N=$(n_queens_size))"
+	$(CXX) $(CXXFLAGS) -DN=$(n_queens_size) -o $@ $(N_QUEENS_CPP_SRC)
+
+n_queens: $(N_QUEENS_CPP_BIN)
+	@echo "[make] Running N-Queens solver (N=$(n_queens_size))"
+	$(N_QUEENS_CPP_BIN)
+
+$(N_QUEENS_SIMV): $(N_QUEENS_SV_SRCS) $(N_QUEENS_TB_SRC) | $(BUILD)
+	@echo "[make] Compiling N-Queens SystemVerilog sources with $(IVERILOG) (N=$(N_QUEENS_SIZE))"
+	$(IVERILOG) $(IVERILOG_FLAGS) -DN=$(N_QUEENS_SIZE) -o $@ $(N_QUEENS_SV_SRCS) $(N_QUEENS_TB_SRC)
+
+n_queens_sv: $(N_QUEENS_SIMV)
+	@echo "[make] Running N-Queens SystemVerilog simulation (output/log in $(BUILD)/)"
+	$(VVP) $(N_QUEENS_SIMV) | tee $(BUILD)/n_queens_sim_$(N_QUEENS_SIZE).out
+
 run: verilog
 
 wave: $(SIMV)
@@ -118,5 +156,7 @@ help:
 	@echo "  make one_max bits=<n> threads=1 : compile+run one_max C++ solver (multi-core (all cores))"
 	@echo "  make one_max bits=<n> threads=<num> : compile+run one_max C++ solver (with <num> threads)"
 	@echo "  make simplex simplex_m=<m> simplex_n=<n> : compile+run simplex C++ solver (10 runs with log)"
+	@echo "  make n_queens n_queens_size=<n> : compile+run N-Queens Min-Conflicts solver (default N=8)"
+	@echo "  make n_queens_sv n_queens_size=<n> : compile+run N-Queens SystemVerilog simulation (default N=8)"
 	@echo "  make wave BITS=<n>             : run verilog and open VCD with gtkwave"
 	@echo "  make clean                     : remove build directory"

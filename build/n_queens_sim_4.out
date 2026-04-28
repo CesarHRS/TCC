@@ -1,0 +1,23 @@
+N-Queens Solution (N=8)
+Iterations: 0
+Final Conflicts: 0
+Solution Found: YES
+Board Configuration:
+. . . . . . . . 
+. . . . . . . . 
+. . . . . . . . 
+. . . . . . . . 
+. . . . . . . . 
+. . . . . . . . 
+. . . . . . . . 
+Q Q Q Q Q Q Q Q 
+Queen Positions (column -> row):
+Col 0 -> Row 7
+Col 1 -> Row 7
+Col 2 -> Row 7
+Col 3 -> Row 7
+Col 4 -> Row 7
+Col 5 -> Row 7
+Col 6 -> Row 7
+Col 7 -> Row 7
+verilog/n_queens/n_queens_tb.sv:79: $finish called at 45000 (1ps)
