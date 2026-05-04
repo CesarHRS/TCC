@@ -5,77 +5,49 @@
 
 module n_queens_tb;
 
-    parameter int N = 8;
-    parameter int MAX_ITERATIONS = 1000000;
+    logic CLOCK_50;
+    logic [17:0] SW;
+    logic [6:0] HEX0, HEX1, HEX2, HEX3;
+    logic [6:0] HEX4, HEX5, HEX6, HEX7;
+    logic [8:0] LEDG;
+    logic [17:0] LEDR;
 
-    // DUT signals
-    logic                    clk;
-    logic                    rst;
-    logic                    start;
-    logic                    done;
-    logic [$clog2(N)-1:0]    board [N-1:0];
-    logic [31:0]             iterations;
-    logic [31:0]             conflicts;
-
-    // DUT instance
-    n_queens #(
-        .N(N),
-        .MAX_ITERATIONS(MAX_ITERATIONS)
-    ) dut (
-        .clk(clk),
-        .rst(rst),
-        .start(start),
-        .done(done),
-        .board(board),
-        .iterations(iterations),
-        .conflicts(conflicts)
+    n_queens_top dut (
+        .CLOCK_50(CLOCK_50),
+        .SW(SW),
+        .HEX0(HEX0),
+        .HEX1(HEX1),
+        .HEX2(HEX2),
+        .HEX3(HEX3),
+        .HEX4(HEX4),
+        .HEX5(HEX5),
+        .HEX6(HEX6),
+        .HEX7(HEX7),
+        .LEDG(LEDG),
+        .LEDR(LEDR)
     );
 
-    // Clock generation
-    always #5 clk = ~clk;
+    always #5 CLOCK_50 = ~CLOCK_50;
 
-    // Test sequence
     initial begin
-        // Initialize
-        clk = 0;
-        rst = 1;
-        start = 0;
+        CLOCK_50 = 0;
+        SW = 18'b0;
 
-        // Reset
-        #10 rst = 0;
+        $dumpfile("n_queens_waves.vcd");
+        $dumpvars(0, n_queens_tb);
 
-        // Start the solver
-        #10 start = 1;
-        #10 start = 0;
+        #20;
+        SW[17] = 1; // release reset
+        #20;
 
-        // Wait for completion or timeout
-        wait(done || iterations >= MAX_ITERATIONS);
+        SW[0] = 1;
+        #10;
+        SW[0] = 0;
 
-        // Display results
-        $display("N-Queens Solution (N=%0d)", N);
-        $display("Iterations: %0d", iterations);
-        $display("Final Conflicts: %0d", conflicts);
-        $display("Solution Found: %s", (conflicts == 0) ? "YES" : "NO");
+        wait (LEDG[8]);
 
-        // Display board
-        $display("Board Configuration:");
-        for (int row = 0; row < N; row++) begin
-            for (int col = 0; col < N; col++) begin
-                if (board[col] == row) begin
-                    $write("Q ");
-                end else begin
-                    $write(". ");
-                end
-            end
-            $write("\n");
-        end
-
-        // Display queen positions
-        $display("Queen Positions (column -> row):");
-        for (int col = 0; col < N; col++) begin
-            $display("Col %0d -> Row %0d", col, board[col]);
-        end
-
+        $display("N-Queens top-level finished 10 runs.");
+        $display("Average time ready on HEX displays.");
         $finish;
     end
 
