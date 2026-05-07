@@ -2,60 +2,58 @@
 `define N_QUEENS_SV
 
 module n_queens #(
-    parameter int N = 50,
-    parameter int MAX_ITERATIONS = 1000000
+    parameter N = 50,
+    parameter MAX_ITERATIONS = 1000000
 )(
-    input  logic                    clk,
-    input  logic                    rst,
-    input  logic                    start,
-    output logic                    done,
-    output logic [$clog2(N)-1:0]    board [N-1:0],
-    output logic [31:0]             iterations,
-    output logic [31:0]             conflicts
+    input  wire clk,
+    input  wire rst,
+    input  wire start,
+    output reg done,
+    output reg [7:0] board_row [0:49],
+    output reg [31:0] iterations,
+    output reg [31:0] conflicts
 );
 
     // FSM states
-    typedef enum logic [3:0] {
-        ST_IDLE,
-        ST_INIT,
-        ST_FIND_CONFLICT_COL,
-        ST_SCAN_COLUMN,
-        ST_SELECT_COL,
-        ST_DECIDE_MOVE,
-        ST_EVAL_ROW,
-        ST_SELECT_ROW,
-        ST_MOVE,
-        ST_CHECK_DONE,
-        ST_RESTART,
-        ST_DONE
-    } state_t;
+    localparam ST_IDLE = 4'd0;
+    localparam ST_INIT = 4'd1;
+    localparam ST_FIND_CONFLICT_COL = 4'd2;
+    localparam ST_SCAN_COLUMN = 4'd3;
+    localparam ST_SELECT_COL = 4'd4;
+    localparam ST_DECIDE_MOVE = 4'd5;
+    localparam ST_EVAL_ROW = 4'd6;
+    localparam ST_SELECT_ROW = 4'd7;
+    localparam ST_MOVE = 4'd8;
+    localparam ST_CHECK_DONE = 4'd9;
+    localparam ST_RESTART = 4'd10;
+    localparam ST_DONE = 4'd11;
 
-    state_t current_state, next_state;
+    reg [3:0] current_state, next_state;
 
     // Internal signals
-    logic [63:0] lfsr_state;
-    logic        lfsr_enable;
-    logic [$clog2(N)-1:0] board_reg [N-1:0];
-    logic [31:0] iter_count;
-    logic [31:0] conflict_count;
-    logic [$clog2(N)-1:0] selected_col;
-    logic [$clog2(N)-1:0] test_row;
-    logic [31:0] min_conflicts;
-    logic [$clog2(N)-1:0] best_row;
-    logic [31:0] max_conflicts;
-    logic [3:0] restart_count;
-    logic [31:0] no_improve_count;
-    logic [31:0] previous_conflict_count;
-    logic [31:0] walk_steps;
-    logic [$clog2(N)-1:0] init_counter;
-    logic [$clog2(N)-1:0] scan_col;
-    logic [$clog2(N)-1:0] col_candidate_count;
-    logic [$clog2(N)-1:0] conflict_cols [N-1:0];
-    logic [$clog2(N)-1:0] row_candidate_count;
-    logic [$clog2(N)-1:0] row_candidates [N-1:0];
-    logic [31:0] current_col_conflicts;
-    logic [31:0] current_row_conflicts;
-    logic [31:0] iter_per_restart;
+    reg [63:0] lfsr_state;
+    reg lfsr_enable;
+    reg [7:0] board_reg [0:49];
+    reg [31:0] iter_count;
+    reg [31:0] conflict_count;
+    reg [7:0] selected_col;
+    reg [7:0] test_row;
+    reg [31:0] min_conflicts;
+    reg [7:0] best_row;
+    reg [31:0] max_conflicts;
+    reg [3:0] restart_count;
+    reg [31:0] no_improve_count;
+    reg [31:0] previous_conflict_count;
+    reg [31:0] walk_steps;
+    reg [7:0] init_counter;
+    reg [7:0] scan_col;
+    reg [7:0] col_candidate_count;
+    reg [7:0] conflict_cols [0:49];
+    reg [7:0] row_candidate_count;
+    reg [7:0] row_candidates [0:49];
+    reg [31:0] current_col_conflicts;
+    reg [31:0] current_row_conflicts;
+    reg [31:0] iter_per_restart;
 
     localparam int MAX_NO_IMPROVE = 500;
     localparam int MAX_WALK_STEPS = 100;
@@ -69,38 +67,44 @@ module n_queens #(
     );
 
     // Count conflicts in a column position for the chosen row
-    function automatic int count_conflicts(
-        input int row,
-        input int col
-    );
-        int conflicts = 0;
-        int other_row;
-        for (int i = 0; i < N; i++) begin
-            if (i != col) begin
-                other_row = board_reg[i];
-                if (other_row == row) begin
-                    conflicts++;
-                end else if ((other_row + i) == (row + col) || (other_row - i) == (row - col)) begin
-                    conflicts++;
+    function count_conflicts;
+        input [7:0] row;
+        input [7:0] col;
+        reg [31:0] conflicts;
+        reg [7:0] other_row;
+        integer i;
+        begin
+            conflicts = 0;
+            for (i = 0; i < N; i = i + 1) begin
+                if (i != col) begin
+                    other_row = board_reg[i];
+                    if (other_row == row) begin
+                        conflicts = conflicts + 1;
+                    end else if (((other_row + i) == (row + col)) || ((other_row - i) == (row - col))) begin
+                        conflicts = conflicts + 1;
+                    end
                 end
             end
+            count_conflicts = conflicts;
         end
-        return conflicts;
     endfunction
 
     // Calculate total pairwise conflicts
-    always_comb begin
-        int total_conflicts = 0;
-        int row_i;
-        int row_j;
-        for (int i = 0; i < N; i++) begin
+    always @(*) begin
+        integer total_conflicts;
+        integer row_i;
+        integer row_j;
+        integer i;
+        integer j;
+        total_conflicts = 0;
+        for (i = 0; i < N; i = i + 1) begin
             row_i = board_reg[i];
-            for (int j = i + 1; j < N; j++) begin
+            for (j = i + 1; j < N; j = j + 1) begin
                 row_j = board_reg[j];
                 if (row_i == row_j) begin
-                    total_conflicts++;
-                end else if ((row_i + i) == (row_j + j) || (row_i - i) == (row_j - j)) begin
-                    total_conflicts++;
+                    total_conflicts = total_conflicts + 1;
+                end else if (((row_i + i) == (row_j + j)) || ((row_i - i) == (row_j - j))) begin
+                    total_conflicts = total_conflicts + 1;
                 end
             end
         end
@@ -108,29 +112,29 @@ module n_queens #(
     end
 
     // FSM sequential logic
-    always_ff @(posedge clk or posedge rst) begin
+    always @(posedge clk or posedge rst) begin
         if (rst) begin
             current_state <= ST_IDLE;
-            for (int i = 0; i < N; i++) begin
-                board_reg[i] <= '0;
-                conflict_cols[i] <= '0;
-                row_candidates[i] <= '0;
+            for (i = 0; i < N; i = i + 1) begin
+                board_reg[i] <= 8'b0;
+                conflict_cols[i] <= 8'b0;
+                row_candidates[i] <= 8'b0;
             end
-            iter_count <= 0;
-            selected_col <= '0;
-            test_row <= '0;
+            iter_count <= 32'b0;
+            selected_col <= 8'b0;
+            test_row <= 8'b0;
             min_conflicts <= 32'hFFFFFFFF;
-            best_row <= '0;
-            restart_count <= 0;
-            no_improve_count <= 0;
-            previous_conflict_count <= 0;
-            walk_steps <= 0;
-            init_counter <= '0;
-            scan_col <= '0;
-            col_candidate_count <= '0;
-            row_candidate_count <= '0;
-            current_col_conflicts <= 0;
-            current_row_conflicts <= 0;
+            best_row <= 8'b0;
+            restart_count <= 4'b0;
+            no_improve_count <= 32'b0;
+            previous_conflict_count <= 32'b0;
+            walk_steps <= 32'b0;
+            init_counter <= 8'b0;
+            scan_col <= 8'b0;
+            col_candidate_count <= 8'b0;
+            row_candidate_count <= 8'b0;
+            current_col_conflicts <= 32'b0;
+            current_row_conflicts <= 32'b0;
             iter_per_restart <= MAX_ITERATIONS / 10;
             lfsr_enable <= 1'b0;
         end else begin
@@ -140,32 +144,32 @@ module n_queens #(
             case (current_state)
                 ST_IDLE: begin
                     if (start) begin
-                        iter_count <= 0;
-                        restart_count <= 0;
-                        no_improve_count <= 0;
-                        previous_conflict_count <= 0;
-                        walk_steps <= 0;
-                        init_counter <= '0;
-                        scan_col <= '0;
-                        col_candidate_count <= '0;
-                        row_candidate_count <= '0;
+                        iter_count <= 32'b0;
+                        restart_count <= 4'b0;
+                        no_improve_count <= 32'b0;
+                        previous_conflict_count <= 32'b0;
+                        walk_steps <= 32'b0;
+                        init_counter <= 8'b0;
+                        scan_col <= 8'b0;
+                        col_candidate_count <= 8'b0;
+                        row_candidate_count <= 8'b0;
                     end
                 end
 
                 ST_INIT: begin
-                    board_reg[init_counter] <= lfsr_state[$clog2(N)-1:0];
+                    board_reg[init_counter] <= (lfsr_state[7:0] % N);
                     lfsr_enable <= 1'b1;
-                    if (init_counter < N - 1) begin
+                    if (init_counter < (N - 1)) begin
                         init_counter <= init_counter + 1;
                     end else begin
-                        init_counter <= '0;
+                        init_counter <= 8'b0;
                     end
                 end
 
                 ST_FIND_CONFLICT_COL: begin
-                    scan_col <= '0;
-                    max_conflicts <= 0;
-                    col_candidate_count <= 0;
+                    scan_col <= 8'b0;
+                    max_conflicts <= 32'b0;
+                    col_candidate_count <= 8'b0;
                     lfsr_enable <= 1'b1;
                 end
 
@@ -190,12 +194,12 @@ module n_queens #(
 
                 ST_SELECT_COL: begin
                     if (max_conflicts == 0) begin
-                        selected_col <= '0;
+                        selected_col <= 8'b0;
                     end else if (col_candidate_count == 1) begin
                         selected_col <= conflict_cols[0];
                     end else begin
-                        logic [$clog2(N)-1:0] random_index;
-                        random_index = lfsr_state[$clog2(N)-1:0] % col_candidate_count;
+                        reg [7:0] random_index;
+                        random_index = (lfsr_state[7:0] % col_candidate_count);
                         selected_col <= conflict_cols[random_index];
                         lfsr_enable <= 1'b1;
                     end
@@ -209,18 +213,18 @@ module n_queens #(
                     end
 
                     if (no_improve_count > MAX_NO_IMPROVE && walk_steps < MAX_WALK_STEPS) begin
-                        selected_col <= lfsr_state[$clog2(N)-1:0];
-                        best_row <= lfsr_state[$clog2(N)-1:0];
+                        selected_col <= (lfsr_state[7:0] % N);
+                        best_row <= (lfsr_state[7:0] % N);
                         walk_steps <= walk_steps + 1;
                         lfsr_enable <= 1'b1;
                     end else begin
-                        test_row <= '0;
+                        test_row <= 8'b0;
                         min_conflicts <= 32'hFFFFFFFF;
-                        row_candidate_count <= 0;
+                        row_candidate_count <= 8'b0;
                         if (no_improve_count > MAX_NO_IMPROVE) begin
                             walk_steps <= walk_steps + 1;
                         end else begin
-                            walk_steps <= 0;
+                            walk_steps <= 32'b0;
                         end
                     end
                 end
@@ -229,13 +233,13 @@ module n_queens #(
                     current_row_conflicts <= count_conflicts(test_row, selected_col);
                     if (current_row_conflicts < min_conflicts) begin
                         min_conflicts <= current_row_conflicts;
-                        row_candidate_count <= 1;
+                        row_candidate_count <= 8'b1;
                         row_candidates[0] <= test_row;
                     end else if (current_row_conflicts == min_conflicts) begin
                         row_candidates[row_candidate_count] <= test_row;
                         row_candidate_count <= row_candidate_count + 1;
                     end
-                    if (test_row < N - 1) begin
+                    if (test_row < (N - 1)) begin
                         test_row <= test_row + 1;
                     end
                 end
@@ -244,9 +248,9 @@ module n_queens #(
                     if (row_candidate_count == 1) begin
                         best_row <= row_candidates[0];
                     end else begin
-                        logic [$clog2(N)-1:0] random_index;
-                        random_index = lfsr_state[$clog2(N)-1:0] % row_candidate_count;
-                        best_row <= row_candidates[random_index];
+                        reg [7:0] random_index;
+                        random_index = (lfsr_state[7:0] % row_candidate_count);
+                        best_row <= random_index;
                         lfsr_enable <= 1'b1;
                     end
                 end
@@ -262,12 +266,12 @@ module n_queens #(
 
                 ST_RESTART: begin
                     restart_count <= restart_count + 1;
-                    iter_count <= 0;
-                    no_improve_count <= 0;
-                    walk_steps <= 0;
-                    init_counter <= '0;
-                    scan_col <= '0;
-                    col_candidate_count <= '0;
+                    iter_count <= 32'b0;
+                    no_improve_count <= 32'b0;
+                    walk_steps <= 32'b0;
+                    init_counter <= 8'b0;
+                    scan_col <= 8'b0;
+                    col_candidate_count <= 8'b0;
                 end
 
                 ST_DONE: begin
@@ -278,7 +282,7 @@ module n_queens #(
     end
 
     // Next state logic
-    always_comb begin
+    always @(*) begin
         next_state = current_state;
         case (current_state)
             ST_IDLE: begin
@@ -286,7 +290,7 @@ module n_queens #(
             end
 
             ST_INIT: begin
-                if (init_counter >= N - 1) begin
+                if (init_counter >= (N - 1)) begin
                     next_state = ST_FIND_CONFLICT_COL;
                 end
             end
@@ -296,7 +300,7 @@ module n_queens #(
             end
 
             ST_SCAN_COLUMN: begin
-                if (scan_col == N - 1) begin
+                if (scan_col == (N - 1)) begin
                     next_state = ST_SELECT_COL;
                 end
             end
@@ -318,7 +322,7 @@ module n_queens #(
             end
 
             ST_EVAL_ROW: begin
-                if (test_row == N - 1) begin
+                if (test_row == (N - 1)) begin
                     next_state = ST_SELECT_ROW;
                 end
             end
@@ -353,10 +357,16 @@ module n_queens #(
         endcase
     end
 
-    assign board = board_reg;
     assign iterations = iter_count;
     assign conflicts = conflict_count;
     assign done = (current_state == ST_DONE);
+
+    integer i;
+    always @(*) begin
+        for (i = 0; i < N; i = i + 1) begin
+            board_row[i] = board_reg[i];
+        end
+    end
 
 endmodule
 

@@ -1,23 +1,23 @@
 module n_queens_top #(
-    parameter int N = 50,
-    parameter int MAX_ITERATIONS = 1000000
+    parameter N = 50,
+    parameter MAX_ITERATIONS = 1000000
 )(
-    input  logic        CLOCK_50,
-    input  logic [17:0] SW,       // SW[17]=Reset, SW[0]=Start
-    output logic [6:0]  HEX0, HEX1, HEX2, HEX3,
-    output logic [6:0]  HEX4, HEX5, HEX6, HEX7,
-    output logic [8:0]  LEDG,
-    output logic [17:0] LEDR
+    input  wire        CLOCK_50,
+    input  wire [17:0] SW,       // SW[17]=Reset, SW[0]=Start
+    output wire [6:0]  HEX0, HEX1, HEX2, HEX3,
+    output wire [6:0]  HEX4, HEX5, HEX6, HEX7,
+    output wire [8:0]  LEDG,
+    output wire [17:0] LEDR
 );
 
-    logic rst_n;
-    logic start_pulse;
-    logic sw0_reg, sw0_reg_prev;
+    wire rst_n;
+    wire start_pulse;
+    reg sw0_reg, sw0_reg_prev;
 
     assign rst_n = SW[17];
 
     // --- Start pulse detector ---
-    always_ff @(posedge CLOCK_50 or negedge rst_n) begin
+    always @(posedge CLOCK_50 or negedge rst_n) begin
         if (!rst_n) begin
             sw0_reg      <= 1'b0;
             sw0_reg_prev <= 1'b0;
@@ -29,11 +29,11 @@ module n_queens_top #(
     assign start_pulse = (sw0_reg == 1'b1) && (sw0_reg_prev == 1'b0);
 
     // --- N-Queens DUT ---
-    logic done;
-    logic [$clog2(N)-1:0] board [N-1:0];
-    logic [31:0] iterations;
-    logic [31:0] conflicts;
-    logic start_run;
+    wire done;
+    wire [7:0] board [0:49];
+    wire [31:0] iterations;
+    wire [31:0] conflicts;
+    reg start_run;
 
     n_queens #(
         .N(N),
@@ -49,28 +49,26 @@ module n_queens_top #(
     );
 
     // --- Run controller ---
-    typedef enum logic [1:0] {
-        IDLE,
-        RUNNING,
-        DONE_STATE
-    } run_state_t;
+    localparam IDLE = 2'd0;
+    localparam RUNNING = 2'd1;
+    localparam DONE_STATE = 2'd2;
 
-    run_state_t run_state;
-    logic [3:0] run_index;
-    logic [63:0] cycle_counter;
-    logic [63:0] sum_cycles;
-    logic avg_ready;
+    reg [1:0] run_state;
+    reg [3:0] run_index;
+    reg [63:0] cycle_counter;
+    reg [63:0] sum_cycles;
+    reg avg_ready;
 
-    logic [63:0] display_cycles;
-    logic [63:0] display_ms;
-    logic [3:0] digit [7:0];
+    wire [63:0] display_cycles;
+    wire [63:0] display_ms;
+    reg [3:0] digit [0:7];
 
-    always_ff @(posedge CLOCK_50 or negedge rst_n) begin
+    always @(posedge CLOCK_50 or negedge rst_n) begin
         if (!rst_n) begin
             run_state    <= IDLE;
-            run_index    <= 0;
-            cycle_counter<= 0;
-            sum_cycles   <= 0;
+            run_index    <= 4'd0;
+            cycle_counter<= 64'd0;
+            sum_cycles   <= 64'd0;
             avg_ready    <= 1'b0;
             start_run    <= 1'b0;
         end else begin
@@ -120,9 +118,11 @@ module n_queens_top #(
         display_ms = display_cycles / 50000; // 50 MHz clock => 20 ns per cycle
     end
 
-    always_comb begin
-        int unsigned tmp = display_ms;
-        for (int i = 0; i < 8; i++) begin
+    always @(*) begin
+        integer unsigned tmp;
+        integer i;
+        tmp = display_ms;
+        for (i = 0; i < 8; i = i + 1) begin
             digit[i] = tmp % 10;
             tmp = tmp / 10;
         end

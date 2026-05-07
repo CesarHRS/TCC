@@ -5,12 +5,12 @@
 
 module n_queens_tb;
 
-    logic CLOCK_50;
-    logic [17:0] SW;
-    logic [6:0] HEX0, HEX1, HEX2, HEX3;
-    logic [6:0] HEX4, HEX5, HEX6, HEX7;
-    logic [8:0] LEDG;
-    logic [17:0] LEDR;
+    wire CLOCK_50;
+    reg [17:0] SW;
+    wire [6:0] HEX0, HEX1, HEX2, HEX3;
+    wire [6:0] HEX4, HEX5, HEX6, HEX7;
+    wire [8:0] LEDG;
+    wire [17:0] LEDR;
 
     n_queens_top dut (
         .CLOCK_50(CLOCK_50),
@@ -27,10 +27,13 @@ module n_queens_tb;
         .LEDR(LEDR)
     );
 
-    always #5 CLOCK_50 = ~CLOCK_50;
+    reg clk_gen;
+    assign CLOCK_50 = clk_gen;
+    
+    always #5 clk_gen = ~clk_gen;
 
     initial begin
-        CLOCK_50 = 0;
+        clk_gen = 0;
         SW = 18'b0;
 
         $dumpfile("n_queens_waves.vcd");

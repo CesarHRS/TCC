@@ -1,29 +1,29 @@
 module one_max(
-    input  logic CLOCK_50,
-    input  logic [17:0] SW,    // SW[17]=Reset, SW[0]=Start
+    input  wire CLOCK_50,
+    input  wire [17:0] SW,    // SW[17]=Reset, SW[0]=Start
     
-    output logic [6:0] HEX0, HEX1, HEX2, HEX3,
-    output logic [6:0] HEX4, HEX5, HEX6, HEX7,
+    output wire [6:0] HEX0, HEX1, HEX2, HEX3,
+    output wire [6:0] HEX4, HEX5, HEX6, HEX7,
     
-    output logic [8:0] LEDG,   
-    output logic [17:0] LEDR );
+    output wire [8:0] LEDG,   
+    output wire [17:0] LEDR );
 
-    logic rst_n;
-    logic start_pulse;
-    logic sw0_reg, sw0_reg_prev;
+    wire rst_n;
+    wire start_pulse;
+    reg sw0_reg, sw0_reg_prev;
 
     assign rst_n = SW[17];
 
-    logic [17:0] clk_div_counter;
-    logic slow_clk_enable;
+    reg [17:0] clk_div_counter;
+    reg slow_clk_enable;
 
-    always_ff @(posedge CLOCK_50 or negedge rst_n) begin
+    always @(posedge CLOCK_50 or negedge rst_n) begin
         if (!rst_n) begin
-            clk_div_counter <= '0;
+            clk_div_counter <= 18'b0;
             slow_clk_enable <= 1'b0;
         end else begin
             if (clk_div_counter >= 250000) begin 
-                clk_div_counter <= '0;
+                clk_div_counter <= 18'b0;
                 slow_clk_enable <= 1'b1; 
             end else begin
                 clk_div_counter <= clk_div_counter + 1;
@@ -33,7 +33,7 @@ module one_max(
     end
 
     // --- Detector de Start ---
-    always_ff @(posedge CLOCK_50 or negedge rst_n) begin
+    always @(posedge CLOCK_50 or negedge rst_n) begin
         if (!rst_n) begin
             sw0_reg      <= 1'b0;
             sw0_reg_prev <= 1'b0;
@@ -46,10 +46,10 @@ module one_max(
 
 
     // --- Sinais Internos ---
-    logic [1023:0] s_best_solution;
-    logic [11:0]   s_best_fitness;
-    logic          s_running;        
-    logic          s_done;           
+    wire [1023:0] s_best_solution;
+    wire [11:0]   s_best_fitness;
+    wire          s_running;        
+    wire          s_done;           
 
     // --- LEDs ---
     assign LEDG[8] = s_done;       
@@ -74,26 +74,26 @@ module one_max(
 
 
     // --- TIMER (MS) ---
-    localparam int CYCLES_PER_MS = 50_000;
+    localparam CYCLES_PER_MS = 50000;
     reg [15:0] prescaler_count; 
     
     reg [3:0] ms_dig0, ms_dig1, ms_dig2; 
     reg [3:0] s_dig0, s_dig1, s_dig2, s_dig3, s_dig4; 
 
-    always_ff @(posedge CLOCK_50 or negedge rst_n) begin
+    always @(posedge CLOCK_50 or negedge rst_n) begin
         if (!rst_n) begin
-            prescaler_count <= '0;
-            ms_dig0 <= '0; ms_dig1 <= '0; ms_dig2 <= '0;
-            s_dig0  <= '0; s_dig1  <= '0; s_dig2  <= '0; s_dig3 <= '0; s_dig4 <= '0;
+            prescaler_count <= 16'b0;
+            ms_dig0 <= 4'b0; ms_dig1 <= 4'b0; ms_dig2 <= 4'b0;
+            s_dig0  <= 4'b0; s_dig1  <= 4'b0; s_dig2  <= 4'b0; s_dig3 <= 4'b0; s_dig4 <= 4'b0;
         end 
         else if (start_pulse) begin
-            prescaler_count <= '0;
-            ms_dig0 <= '0; ms_dig1 <= '0; ms_dig2 <= '0;
-            s_dig0  <= '0; s_dig1  <= '0; s_dig2  <= '0; s_dig3 <= '0; s_dig4 <= '0;
+            prescaler_count <= 16'b0;
+            ms_dig0 <= 4'b0; ms_dig1 <= 4'b0; ms_dig2 <= 4'b0;
+            s_dig0  <= 4'b0; s_dig1  <= 4'b0; s_dig2  <= 4'b0; s_dig3 <= 4'b0; s_dig4 <= 4'b0;
         end
         else if (s_running && !s_done) begin
-            if (prescaler_count == CYCLES_PER_MS - 1) begin
-                prescaler_count <= '0;
+            if (prescaler_count == (CYCLES_PER_MS - 1)) begin
+                prescaler_count <= 16'b0;
                 
                 ms_dig0 <= ms_dig0 + 1;
                 if (ms_dig0 == 9) begin

@@ -2,20 +2,21 @@
 
 module simplex_tb;
 
-    parameter int M = 3;
-    parameter int N = 2;
-    parameter int W = 32;
-    parameter int Q = 16;
-    parameter int MAX_ITERS = 20;
+    parameter M = 3;
+    parameter N = 2;
+    parameter W = 32;
+    parameter Q = 16;
+    parameter MAX_ITERS = 20;
 
-    logic clk;
-    logic rst_n;
-    logic start;
-    logic done;
-    logic unbounded;
-    logic infeasible;
-    logic signed [W-1:0] objective;
-    logic signed [W-1:0] x [0:N-1];
+    reg clk;
+    reg rst_n;
+    reg start;
+    wire done;
+    wire unbounded;
+    wire infeasible;
+    wire signed [W-1:0] objective;
+    wire signed [W-1:0] x_0;
+    wire signed [W-1:0] x_1;
 
     simplex #(
         .M(M),
@@ -31,7 +32,8 @@ module simplex_tb;
         .unbounded(unbounded),
         .infeasible(infeasible),
         .objective(objective),
-        .x(x)
+        .x_out_0(x_0),
+        .x_out_1(x_1)
     );
 
     initial begin
@@ -39,13 +41,11 @@ module simplex_tb;
         forever #5 clk = ~clk; // 100 MHz
     end
 
-    real obj_val;
-    real x1_val;
-    real x2_val;
-    real scale;
+    integer obj_val;
+    integer x1_val;
+    integer x2_val;
 
     initial begin
-        scale = 2.0**Q;
         rst_n = 0;
         start = 0;
         #20;
@@ -57,22 +57,20 @@ module simplex_tb;
         start = 0;
 
         wait(done == 1);
-        $display("[TB] done=%0d unbounded=%0d infeasible=%0d objective=%0f x1=%0f x2=%0f", done, unbounded, infeasible,
-            $itor(objective)/2.0**Q,
-            $itor(x[0]) / 2.0**Q,
-            $itor(x[1]) / 2.0**Q);
+        $display("[TB] done=%0d unbounded=%0d infeasible=%0d objective=%0d x1=%0d x2=%0d", 
+            done, unbounded, infeasible, objective, x_0, x_1);
 
         if (unbounded || infeasible) begin
-            $error("Problema deveria estar resolvível e limitado");
+            $display("ERROR: Problema deveria estar resolvível e limitado");
             $finish;
         end
 
-        obj_val = $itor(objective) / scale;
-        x1_val  = $itor(x[0]) / scale;
-        x2_val  = $itor(x[1]) / scale;
+        obj_val = objective;
+        x1_val  = x_0;
+        x2_val  = x_1;
 
-        if (!(obj_val > 0.0) || x1_val < 0.0 || x2_val < 0.0) begin
-            $error("Resultado inválido: objective=%f x1=%f x2=%f", obj_val, x1_val, x2_val);
+        if (!(obj_val > 0) || x1_val < 0 || x2_val < 0) begin
+            $display("ERROR: Resultado inválido: objective=%0d x1=%0d x2=%0d", obj_val, x1_val, x2_val);
             $finish;
         end
 
@@ -84,7 +82,7 @@ module simplex_tb;
     // Timeout monitor
     initial begin
         #5000;
-        $error("Timeout: algoritmo simplex nao concluiu em 5us (5000ns)");
+        $display("ERROR: Timeout: algoritmo simplex nao concluiu em 5us (5000ns)");
         $finish;
     end
 
