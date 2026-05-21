@@ -1,32 +1,23 @@
-`ifndef LFSR64_SV
-`define LFSR64_SV
+// LFSR de 64 bits — polinômio x^64 + x^63 + x^61 + x^60 + 1
+// Taps nos bits 63, 62, 60, 59. Idêntico ao LFSR64 do software (cpp/n_queens/lfsr64.h).
+// Semente fixa 0xDEADBEEFCAFEBABE em reset, igual ao C++.
+//
+// Cada ciclo com `enable` alto produz um novo estado (shift left + novo bit no LSB).
 
 module lfsr64 (
     input  wire        clk,
-    input  wire        rst,
+    input  wire        rst_n,
     input  wire        enable,
-    output wire [63:0] state
+    output reg  [63:0] state
 );
 
-    // Galois LFSR with taps at 63, 62, 60, 59
-    // Feedback: state[63] ^ state[62] ^ state[60] ^ state[59]
+    wire new_bit = state[63] ^ state[62] ^ state[60] ^ state[59];
 
-    reg [63:0] state_reg;
-    assign state = state_reg;
-
-    always @(posedge clk or posedge rst) begin
-        if (rst) begin
-            state_reg <= 64'h123456789ABCDEF;  // Default seed
-        end else if (enable) begin
-            // Calculate feedback
-            reg feedback;
-            feedback = state_reg[63] ^ state_reg[62] ^ state_reg[60] ^ state_reg[59];
-
-            // Shift right and insert feedback at MSB
-            state_reg <= {feedback, state_reg[63:1]};
-        end
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n)
+            state <= 64'hDEAD_BEEF_CAFE_BABE;
+        else if (enable)
+            state <= {state[62:0], new_bit};
     end
 
 endmodule
-
-`endif // LFSR64_SV

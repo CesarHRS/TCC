@@ -23,7 +23,8 @@ IVERILOG_FLAGS ?= -g2012
 VERILOG_N_QUEENS_DIR := $(VERILOG_DIR)/n_queens
 N_QUEENS_TB_SRC := $(VERILOG_N_QUEENS_DIR)/n_queens_tb.sv
 N_QUEENS_SV_SRCS := $(VERILOG_N_QUEENS_DIR)/lfsr64.sv \
-                    $(VERILOG_N_QUEENS_DIR)/n_queens.sv
+                    $(VERILOG_N_QUEENS_DIR)/fitness.sv \
+                    $(VERILOG_N_QUEENS_DIR)/n_queens_ga.sv
 
 N_QUEENS_TOP := n_queens_tb
 N_QUEENS_SIMV := $(BUILD)/$(N_QUEENS_TOP)_$(N_QUEENS_SIZE).vvp
@@ -48,16 +49,10 @@ SIMPLEX_N := $(simplex_n)
 SIMPLEX_CPP_SRC := cpp/simplex/simplex.cpp
 SIMPLEX_CPP_BIN := $(BUILD)/simplex_$(SIMPLEX_M)x$(SIMPLEX_N)
 
-# N-Queens C++
+# N-Queens C++ (Genetic Algorithm)
 n_queens_size ?= 8
 N_QUEENS_SIZE := $(n_queens_size)
-N_QUEENS_CPP_SRC := cpp/n_queens/main.cpp
-N_QUEENS_CPP_BIN := $(BUILD)/nqueens_$(N_QUEENS_SIZE)
-
-# N-Queens C++
-n_queens_size ?= 8
-N_QUEENS_SIZE := $(n_queens_size)
-N_QUEENS_CPP_SRC := cpp/n_queens/main.cpp
+N_QUEENS_CPP_SRC := cpp/n_queens/main.cpp cpp/n_queens/nqueens.cpp cpp/n_queens/genetic.cpp
 N_QUEENS_CPP_BIN := $(BUILD)/nqueens_$(N_QUEENS_SIZE)
 
 .PHONY: all verilog one_max simplex n_queens sim wave run clean help
@@ -111,12 +106,18 @@ simplex: $(SIMPLEX_CPP_BIN)
 	done | tee -a $(BUILD)/simplex_$(SIMPLEX_M)x$(SIMPLEX_N).out | awk '/Tempo/ {for (j=1; j<=NF; j++) if ($$j == "=") {sum += $$(j+1); count++; break}} END {if (count > 0) print "=========================================\nMédia:", sum/count, "µs\n========================================="}' >> $(BUILD)/simplex_$(SIMPLEX_M)x$(SIMPLEX_N).out
 
 $(N_QUEENS_CPP_BIN): $(N_QUEENS_CPP_SRC) | $(BUILD)
-	@echo "[make] Compiling N-Queens Min-Conflicts solver (N=$(n_queens_size))"
+	@echo "[make] Compiling N-Queens Genetic Algorithm solver (N=$(n_queens_size))"
 	$(CXX) $(CXXFLAGS) -DN=$(n_queens_size) -o $@ $(N_QUEENS_CPP_SRC)
 
 n_queens: $(N_QUEENS_CPP_BIN)
-	@echo "[make] Running N-Queens solver (N=$(n_queens_size))"
-	$(N_QUEENS_CPP_BIN)
+	@echo "[make] Running N-Queens GA solver (N=$(n_queens_size)) 10 times"
+	@echo "=========================================" > $(BUILD)/nqueens_$(N_QUEENS_SIZE).out
+	@echo "Teste: N=$(n_queens_size), Algoritmo=Genetico" >> $(BUILD)/nqueens_$(N_QUEENS_SIZE).out
+	@echo "=========================================" >> $(BUILD)/nqueens_$(N_QUEENS_SIZE).out
+	@for i in 1 2 3 4 5 6 7 8 9 10; do \
+		echo "Run $$i:"; \
+		$(N_QUEENS_CPP_BIN); \
+	done | tee -a $(BUILD)/nqueens_$(N_QUEENS_SIZE).out | awk '/Tempo/ {for (j=1; j<=NF; j++) if ($$j == "=") {sum += $$(j+1); count++; break}} END {if (count > 0) print "=========================================\nMédia:", sum/count, "µs\n========================================="}' >> $(BUILD)/nqueens_$(N_QUEENS_SIZE).out
 
 $(N_QUEENS_SIMV): $(N_QUEENS_SV_SRCS) $(N_QUEENS_TB_SRC) | $(BUILD)
 	@echo "[make] Compiling N-Queens SystemVerilog sources with $(IVERILOG) (N=$(N_QUEENS_SIZE))"
@@ -125,6 +126,10 @@ $(N_QUEENS_SIMV): $(N_QUEENS_SV_SRCS) $(N_QUEENS_TB_SRC) | $(BUILD)
 n_queens_sv: $(N_QUEENS_SIMV)
 	@echo "[make] Running N-Queens SystemVerilog simulation (output/log in $(BUILD)/)"
 	$(VVP) $(N_QUEENS_SIMV) | tee $(BUILD)/n_queens_sim_$(N_QUEENS_SIZE).out
+	@if [ -f "n_queens_waves.vcd" ]; then \
+		mv n_queens_waves.vcd $(N_QUEENS_VCD); \
+		echo "[make] VCD saved to $(N_QUEENS_VCD)"; \
+	fi
 
 run: verilog
 
@@ -156,7 +161,7 @@ help:
 	@echo "  make one_max bits=<n> threads=1 : compile+run one_max C++ solver (multi-core (all cores))"
 	@echo "  make one_max bits=<n> threads=<num> : compile+run one_max C++ solver (with <num> threads)"
 	@echo "  make simplex simplex_m=<m> simplex_n=<n> : compile+run simplex C++ solver (10 runs with log)"
-	@echo "  make n_queens n_queens_size=<n> : compile+run N-Queens Min-Conflicts solver (default N=8)"
+	@echo "  make n_queens n_queens_size=<n> : compile+run N-Queens Genetic Algorithm solver (default N=8, 10 runs with log)"
 	@echo "  make n_queens_sv n_queens_size=<n> : compile+run N-Queens SystemVerilog simulation (default N=8)"
 	@echo "  make wave BITS=<n>             : run verilog and open VCD with gtkwave"
 	@echo "  make clean                     : remove build directory"

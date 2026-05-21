@@ -1,53 +1,20 @@
-#ifndef LFSR64_H
-#define LFSR64_H
-
+#pragma once
 #include <cstdint>
 
+// LFSR de 64 bits com polinômio x^64 + x^63 + x^61 + x^60 + 1
+// Taps nos bits 63, 62, 60, 59 — idêntico ao hardware (verilog/n_queens/lfsr64.sv).
+// Shift para a esquerda: novo bit entra no LSB.
 class LFSR64 {
-private:
-    uint64_t state;
-
-    static constexpr uint64_t TAP_63 = 1ULL << 63;
-    static constexpr uint64_t TAP_62 = 1ULL << 62;
-    static constexpr uint64_t TAP_60 = 1ULL << 60;
-    static constexpr uint64_t TAP_59 = 1ULL << 59;
-
+    uint64_t st;
 public:
-    explicit LFSR64(uint64_t seed = 0x123456789ABCDEFULL) : state(seed) {
-        if (state == 0) {
-            state = 0x123456789ABCDEFULL;
-        }
-    }
+    explicit LFSR64(uint64_t seed = 0xDEADBEEFCAFEBABEULL) : st(seed) {}
 
     uint64_t next() {
-        // Extract feedback from the taps
-        uint64_t feedback = ((state & TAP_63) >> 63) ^
-                           ((state & TAP_62) >> 62) ^
-                           ((state & TAP_60) >> 60) ^
-                           ((state & TAP_59) >> 59);
-
-        // Shift right and insert feedback at MSB
-        state = (state >> 1) | (feedback << 63);
-
-        return state;
+        uint64_t bit = ((st >> 63) ^ (st >> 62) ^ (st >> 60) ^ (st >> 59)) & 1ULL;
+        st = (st << 1) | bit;
+        return st;
     }
 
-    uint32_t nextRange(uint32_t max) {
-        if (max == 0) return 0;
-        return next() % max;
-    }
-
-    uint64_t getState() const {
-        return state;
-    }
-
-    void setState(uint64_t newState) {
-        if (newState == 0) {
-            state = 0x123456789ABCDEFULL;
-        } else {
-            state = newState;
-        }
-    }
+    // Retorna valor em [0, n). Equivalente a mascarar bits no hardware.
+    uint64_t range(uint64_t n) { return next() % n; }
 };
-
-#endif // LFSR64_H
