@@ -82,53 +82,40 @@ module n_queens_top #(
     endgenerate
 
     // --- Cronômetro: conta de start_gated até done, congela ao terminar ---
-    // 8 dígitos BCD em microssegundos: HEX0=unidades, HEX7=dezenas de milhão
+    // Contador binário de 32 bits em microssegundos: HEX0=nibble menos significativo,
+    // HEX7=nibble mais significativo. Exibe o tempo em hexadecimal.
+    // Alcance: 0x00000000–0xFFFFFFFF µs ≈ 4295 s (>>  100 s necessários).
     // A 50 MHz: 1 µs = 50 ciclos de clock.
     localparam int CYCLES_PER_US = 50;
-    reg [5:0] presc;
-    reg [3:0] us0, us1, us2, us3, us4, us5, us6, us7;
+    reg [5:0]  presc;
+    reg [31:0] us_count;  // contador único; cada nibble alimenta um display
 
     always @(posedge CLOCK_50 or negedge rst_n) begin
         if (!rst_n) begin
-            presc <= 0;
-            us0 <= 0; us1 <= 0; us2 <= 0; us3 <= 0;
-            us4 <= 0; us5 <= 0; us6 <= 0; us7 <= 0;
+            presc    <= 0;
+            us_count <= 0;
         end else if (start_gated) begin
-            presc <= 0;
-            us0 <= 0; us1 <= 0; us2 <= 0; us3 <= 0;
-            us4 <= 0; us5 <= 0; us6 <= 0; us7 <= 0;
+            presc    <= 0;
+            us_count <= 0;
         end else if (s_running && !s_done) begin
             if (presc == CYCLES_PER_US - 1) begin
-                presc <= 0;
-                if (us0 == 9) begin us0 <= 0;
-                    if (us1 == 9) begin us1 <= 0;
-                        if (us2 == 9) begin us2 <= 0;
-                            if (us3 == 9) begin us3 <= 0;
-                                if (us4 == 9) begin us4 <= 0;
-                                    if (us5 == 9) begin us5 <= 0;
-                                        if (us6 == 9) begin us6 <= 0;
-                                            if (us7 != 9) us7 <= us7 + 4'd1;
-                                        end else us6 <= us6 + 4'd1;
-                                    end else us5 <= us5 + 4'd1;
-                                end else us4 <= us4 + 4'd1;
-                            end else us3 <= us3 + 4'd1;
-                        end else us2 <= us2 + 4'd1;
-                    end else us1 <= us1 + 4'd1;
-                end else us0 <= us0 + 4'd1;
+                presc    <= 0;
+                us_count <= us_count + 1;  // incremento binário simples
             end else begin
                 presc <= presc + 6'd1;
             end
         end
     end
 
-    // --- Displays: HEX0–HEX7 mostram tempo em µs (8 dígitos BCD) ---
-    display d0 ( .hex_digit(us0), .segments(HEX0) );
-    display d1 ( .hex_digit(us1), .segments(HEX1) );
-    display d2 ( .hex_digit(us2), .segments(HEX2) );
-    display d3 ( .hex_digit(us3), .segments(HEX3) );
-    display d4 ( .hex_digit(us4), .segments(HEX4) );
-    display d5 ( .hex_digit(us5), .segments(HEX5) );
-    display d6 ( .hex_digit(us6), .segments(HEX6) );
-    display d7 ( .hex_digit(us7), .segments(HEX7) );
+    // --- Displays: HEX0–HEX7 mostram tempo em µs (8 dígitos hexadecimais) ---
+    // Cada nibble de 4 bits do contador vai direto para um display.
+    display d0 ( .hex_digit(us_count[ 3: 0]), .segments(HEX0) );
+    display d1 ( .hex_digit(us_count[ 7: 4]), .segments(HEX1) );
+    display d2 ( .hex_digit(us_count[11: 8]), .segments(HEX2) );
+    display d3 ( .hex_digit(us_count[15:12]), .segments(HEX3) );
+    display d4 ( .hex_digit(us_count[19:16]), .segments(HEX4) );
+    display d5 ( .hex_digit(us_count[23:20]), .segments(HEX5) );
+    display d6 ( .hex_digit(us_count[27:24]), .segments(HEX6) );
+    display d7 ( .hex_digit(us_count[31:28]), .segments(HEX7) );
 
 endmodule  // n_queens_top

@@ -1,5 +1,5 @@
 // Algoritmo genético para o problema das N rainhas.
-// Equivalente estrutural ao C++ em cpp/n_queens/genetic.cpp.
+// Equivalente estrutural ao C++ em cpp/n_queens_ga/genetic.cpp.
 //
 // Correções de sintetizabilidade aplicadas:
 //   1. pack_chrom removida — escritas usam chrom_reg_flat_w (wire combinacional).

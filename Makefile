@@ -1,167 +1,265 @@
-bits ?= 1024
-BITS = $(bits)
+# =============================================================================
+#  Parâmetros globais
+# =============================================================================
+bits          ?= 1024
+runs          ?= 10
+n_queens_size ?= 8
+n_min         ?= 4
+n_max         ?= 15
+threads       ?= 1
+simplex_m     ?= 3
+simplex_n     ?= 2
 
-VERILOG_DIR := verilog
-VERILOG_ONE_MAX_DIR := $(VERILOG_DIR)/one_max
-VERILOG_SIMPLEX_DIR := $(VERILOG_DIR)/simplex
-TB_SRC := $(VERILOG_ONE_MAX_DIR)/one_max_tb.sv
-SV_SRCS := $(VERILOG_ONE_MAX_DIR)/display.sv \
-           $(VERILOG_ONE_MAX_DIR)/hill_climbing.sv \
-           $(VERILOG_ONE_MAX_DIR)/one_max.sv
+BITS          := $(bits)
+RUNS          := $(runs)
+N_QUEENS_SIZE := $(n_queens_size)
+N_MIN         := $(n_min)
+N_MAX         := $(n_max)
+THREADS       := $(threads)
+SIMPLEX_M     := $(simplex_m)
+SIMPLEX_N     := $(simplex_n)
 
-TOP := one_max_tb
-BUILD := build
-TB_BUILD := $(BUILD)/one_max_tb_$(BITS).sv
-SIMV := $(BUILD)/$(TOP)_$(BITS).vvp
-VCD := $(BUILD)/dump_$(BITS).vcd
-IVERILOG ?= iverilog
-VVP ?= vvp
-GTKWAVE ?= gtkwave
+# =============================================================================
+#  Ferramentas
+# =============================================================================
+CXX          ?= g++
+CXXFLAGS     ?= -O3 -std=c++17 -march=native -Wall -Wextra -pipe
+ifeq ($(filter 1,$(threads)),)
+CXXFLAGS     += -DUSE_THREADS -DNUM_THREADS=$(THREADS)
+endif
+
+IVERILOG     ?= iverilog
+VVP          ?= vvp
+GTKWAVE      ?= gtkwave
 IVERILOG_FLAGS ?= -g2012
 
-# Verilog N-Queens
-VERILOG_N_QUEENS_DIR := $(VERILOG_DIR)/n_queens
-N_QUEENS_TB_SRC := $(VERILOG_N_QUEENS_DIR)/n_queens_tb.sv
+# =============================================================================
+#  Caminhos
+# =============================================================================
+BUILD        := build
+
+VERILOG_DIR           := verilog
+VERILOG_ONE_MAX_DIR   := $(VERILOG_DIR)/one_max
+VERILOG_N_QUEENS_DIR  := $(VERILOG_DIR)/n_queens_ga
+
+# --- One Max (Verilog) ---
+TB_SRC       := $(VERILOG_ONE_MAX_DIR)/one_max_tb.sv
+SV_SRCS      := $(VERILOG_ONE_MAX_DIR)/display.sv \
+                $(VERILOG_ONE_MAX_DIR)/hill_climbing.sv \
+                $(VERILOG_ONE_MAX_DIR)/one_max.sv
+TOP          := one_max_tb
+TB_BUILD     := $(BUILD)/one_max_tb_$(BITS).sv
+SIMV         := $(BUILD)/$(TOP)_$(BITS).vvp
+VCD          := $(BUILD)/dump_$(BITS).vcd
+
+# --- One Max (C++) ---
+ONE_MAX_CPP_SRC := cpp/one_max/main.cpp \
+                   cpp/one_max/dynbits.cpp \
+                   cpp/one_max/hill_climbing.cpp
+ONE_MAX_CPP_BIN := $(BUILD)/onemax_t$(THREADS)_n$(BITS)
+ONE_MAX_LOG     := $(BUILD)/onemax_n$(BITS)_r$(RUNS).log
+
+# --- N-Queens (C++) ---
+N_QUEENS_CPP_SRC := cpp/n_queens_ga/main.cpp \
+                    cpp/n_queens_ga/nqueens.cpp \
+                    cpp/n_queens_ga/genetic.cpp
+N_QUEENS_CPP_BIN := $(BUILD)/nqueens_n$(N_QUEENS_SIZE)
+N_QUEENS_LOG     := $(BUILD)/nqueens_n$(N_QUEENS_SIZE)_r$(RUNS).log
+N_QUEENS_REG_LOG := $(BUILD)/nqueens_reg_n$(N_MIN)to$(N_MAX)_r$(RUNS).log
+
+# --- N-Queens (Verilog) ---
+N_QUEENS_TB_SRC  := $(VERILOG_N_QUEENS_DIR)/n_queens_tb.sv
 N_QUEENS_SV_SRCS := $(VERILOG_N_QUEENS_DIR)/lfsr64.sv \
                     $(VERILOG_N_QUEENS_DIR)/fitness.sv \
                     $(VERILOG_N_QUEENS_DIR)/n_queens_ga.sv
+N_QUEENS_TOP     := n_queens_tb
+N_QUEENS_SIMV    := $(BUILD)/$(N_QUEENS_TOP)_n$(N_QUEENS_SIZE).vvp
+N_QUEENS_VCD     := $(BUILD)/n_queens_dump_n$(N_QUEENS_SIZE).vcd
 
-N_QUEENS_TOP := n_queens_tb
-N_QUEENS_SIMV := $(BUILD)/$(N_QUEENS_TOP)_$(N_QUEENS_SIZE).vvp
-N_QUEENS_VCD := $(BUILD)/n_queens_dump_$(N_QUEENS_SIZE).vcd
-
-CXX ?= g++
-CXXFLAGS ?= -O3 -std=c++17 -march=native -Wall -Wextra -pipe
-ifdef threads
-CXXFLAGS += -DUSE_THREADS -DNUM_THREADS=$(THREADS)
-endif
-THREADS := $(if $(threads),$(if $(filter 1 yes on true,$(threads)),$(shell nproc),$(threads)),1)
-
-# One Max C++
-ONE_MAX_CPP_SRC := cpp/one_max/main.cpp cpp/one_max/dynbits.cpp cpp/one_max/hill_climbing.cpp
-ONE_MAX_CPP_BIN := $(BUILD)/onemax_$(THREADS)_$(BITS)
-
-# Simplex C++
-simplex_m ?= 3
-simplex_n ?= 2
-SIMPLEX_M := $(simplex_m)
-SIMPLEX_N := $(simplex_n)
+# --- Simplex (C++) ---
 SIMPLEX_CPP_SRC := cpp/simplex/simplex.cpp
 SIMPLEX_CPP_BIN := $(BUILD)/simplex_$(SIMPLEX_M)x$(SIMPLEX_N)
 
-# N-Queens C++ (Genetic Algorithm)
-n_queens_size ?= 8
-N_QUEENS_SIZE := $(n_queens_size)
-N_QUEENS_CPP_SRC := cpp/n_queens/main.cpp cpp/n_queens/nqueens.cpp cpp/n_queens/genetic.cpp
-N_QUEENS_CPP_BIN := $(BUILD)/nqueens_$(N_QUEENS_SIZE)
+# =============================================================================
+#  Macro: loop de execuções com min/max/média
+#  Uso: $(call run_bench, BINARY, LOG, LABEL)
+# =============================================================================
+define run_bench
+	@{ \
+	  printf "=========================================\n"; \
+	  printf " %s\n" "$(3)"; \
+	  printf " Runs: $(RUNS)\n"; \
+	  printf " Data: %s\n" "$$(date '+%Y-%m-%d %H:%M:%S')"; \
+	  printf "=========================================\n\n"; \
+	  printf "%-6s  %14s\n" "Run" "Tempo (µs)"; \
+	  printf "%-6s  %14s\n" "------" "--------------"; \
+	  min_us=9999999999; max_us=0; sum_us=0; ok=0; \
+	  for i in $$(seq 1 $(RUNS)); do \
+	    output=$$($(1) 2>/dev/null); \
+	    us=$$(echo "$$output" | awk '/Tempo/ { for(j=1;j<=NF;j++) if($$j=="="){print $$(j+1);exit} }'); \
+	    if [ -z "$$us" ]; then \
+	      printf "%-6d  %14s\n" "$$i" "SEM_SOL"; \
+	      continue; \
+	    fi; \
+	    printf "%-6d  %14d\n" "$$i" "$$us"; \
+	    [ "$$us" -lt "$$min_us" ] && min_us=$$us; \
+	    [ "$$us" -gt "$$max_us" ] && max_us=$$us; \
+	    sum_us=$$((sum_us + us)); \
+	    ok=$$((ok + 1)); \
+	  done; \
+	  if [ "$$ok" -gt 0 ]; then \
+	    avg_us=$$((sum_us / ok)); \
+	    printf "\n%-20s  %14s\n" "--------------------" "--------------"; \
+	    printf "%-20s  %14d\n" "Mínimo (µs)" "$$min_us"; \
+	    printf "%-20s  %14d\n" "Máximo (µs)" "$$max_us"; \
+	    printf "%-20s  %14d\n" "Média  (µs)" "$$avg_us"; \
+	    printf "%-20s  %14d\n" "Total  (µs)" "$$sum_us"; \
+	  fi; \
+	  printf "\n=========================================\n"; \
+	  printf " Log salvo em: $(2)\n"; \
+	  printf "=========================================\n"; \
+	} 2>&1 | tee $(2)
+endef
 
-.PHONY: all verilog one_max simplex n_queens sim wave run clean help
+# =============================================================================
+#  Targets
+# =============================================================================
+.PHONY: all one_max n_queens n_queens_regression n_queens_sv verilog simplex wave run clean help
 all: help
 
 $(BUILD):
 	@mkdir -p $(BUILD)
 
+# --- One Max: simulação Verilog ------------------------------------------
 $(TB_BUILD): $(TB_SRC) | $(BUILD)
-	@echo "[make] Generating testbench with N_BITS=$(BITS)"
+	@echo "[make] Preparando testbench (N_BITS=$(BITS))"
 	@cp $(TB_SRC) $@
 
 $(SIMV): $(SV_SRCS) $(TB_BUILD) | $(BUILD)
-	@echo "[make] Compiling SystemVerilog sources with $(IVERILOG) (N_BITS=$(BITS))"
+	@echo "[make] Compilando SystemVerilog OneMax (N_BITS=$(BITS))"
 	$(IVERILOG) $(IVERILOG_FLAGS) -o $@ $(SV_SRCS) $(TB_BUILD)
 
 verilog: $(SIMV)
-	@echo "[make] Running Verilog simulation (output/log in $(BUILD)/)"
+	@echo "[make] Simulando OneMax Verilog (N_BITS=$(BITS))"
 	$(VVP) $(SIMV) | tee $(BUILD)/sim_$(BITS).out
 
+wave: $(SIMV)
+	$(VVP) $(SIMV) | tee $(BUILD)/sim_$(BITS).out
+	@if [ -f "one_max_waves.vcd" ]; then mv one_max_waves.vcd $(VCD); fi
+	@if [ -f "$(VCD)" ] && command -v $(GTKWAVE) >/dev/null 2>&1; then \
+	  $(GTKWAVE) $(VCD); \
+	else \
+	  echo "[make] VCD disponível em $(VCD)"; \
+	fi
+
+# --- One Max: C++ -----------------------------------------------------------
 $(ONE_MAX_CPP_BIN): $(ONE_MAX_CPP_SRC) | $(BUILD)
-	@echo "[make] Compiling OneMax C++ solver with bits=$(bits)"
-	$(CXX) $(CXXFLAGS) -DBITS=$(bits) -o $@ $(ONE_MAX_CPP_SRC)
+	@echo "[make] Compilando OneMax C++ (bits=$(BITS), threads=$(THREADS))"
+	$(CXX) $(CXXFLAGS) -DBITS=$(BITS) -o $@ $(ONE_MAX_CPP_SRC)
 
 one_max: $(ONE_MAX_CPP_BIN)
-	@echo "[make] Running OneMax C++ solver (bits=$(bits), THREADS=$(THREADS)) 10 times"
-	@echo "=========================================" > $(BUILD)/cpp_$(THREADS)_$(bits).out
-	@if [ $(THREADS) -eq 1 ]; then \
-		echo "Teste: BITS=$(bits), MODE=SINGLE-CORE" >> $(BUILD)/cpp_$(THREADS)_$(bits).out; \
-	else \
-		echo "Teste: BITS=$(bits), MODE=MULTI-CORE ($(THREADS) threads)" >> $(BUILD)/cpp_$(THREADS)_$(bits).out; \
-	fi
-	@echo "=========================================" >> $(BUILD)/cpp_$(THREADS)_$(bits).out
-	@for i in 1 2 3 4 5 6 7 8 9 10; do \
-		echo "Run $$i:"; \
-		$(ONE_MAX_CPP_BIN); \
-	done | tee -a $(BUILD)/cpp_$(THREADS)_$(bits).out | awk '/Tempo/ {for (j=1; j<=NF; j++) if ($$j == "=") {sum += $$(j+1); count++; break}} END {if (count > 0) print "=========================================\nMédia:", sum/count, "µs\n========================================="}' >> $(BUILD)/cpp_$(THREADS)_$(bits).out
+	$(call run_bench,$(ONE_MAX_CPP_BIN),$(ONE_MAX_LOG),OneMax Hill Climbing (C++) — bits=$(BITS))
 
-$(SIMPLEX_CPP_BIN): $(SIMPLEX_CPP_SRC) | $(BUILD)
-	@echo "[make] Compiling Simplex C++ solver (SIMPLEX_M=$(simplex_m) SIMPLEX_N=$(simplex_n))"
-	$(CXX) $(CXXFLAGS) -DSIMPLEX_M=$(simplex_m) -DSIMPLEX_N=$(simplex_n) -o $@ $(SIMPLEX_CPP_SRC)
-
-simplex: $(SIMPLEX_CPP_BIN)
-	@echo "[make] Running Simplex C++ solver (M=$(simplex_m), N=$(simplex_n)) 10 times"
-	@echo "=========================================" > $(BUILD)/simplex_$(SIMPLEX_M)x$(SIMPLEX_N).out
-	@echo "Teste: SIMPLEX_M=$(simplex_m), SIMPLEX_N=$(simplex_n)" >> $(BUILD)/simplex_$(SIMPLEX_M)x$(SIMPLEX_N).out
-	@echo "=========================================" >> $(BUILD)/simplex_$(SIMPLEX_M)x$(SIMPLEX_N).out
-	@for i in 1 2 3 4 5 6 7 8 9 10; do \
-		echo "Run $$i:"; \
-		$(SIMPLEX_CPP_BIN); \
-	done | tee -a $(BUILD)/simplex_$(SIMPLEX_M)x$(SIMPLEX_N).out | awk '/Tempo/ {for (j=1; j<=NF; j++) if ($$j == "=") {sum += $$(j+1); count++; break}} END {if (count > 0) print "=========================================\nMédia:", sum/count, "µs\n========================================="}' >> $(BUILD)/simplex_$(SIMPLEX_M)x$(SIMPLEX_N).out
-
+# --- N-Queens: C++ ----------------------------------------------------------
 $(N_QUEENS_CPP_BIN): $(N_QUEENS_CPP_SRC) | $(BUILD)
-	@echo "[make] Compiling N-Queens Genetic Algorithm solver (N=$(n_queens_size))"
-	$(CXX) $(CXXFLAGS) -DN=$(n_queens_size) -o $@ $(N_QUEENS_CPP_SRC)
+	@echo "[make] Compilando N-Queens C++ (N=$(N_QUEENS_SIZE))"
+	$(CXX) $(CXXFLAGS) -DN=$(N_QUEENS_SIZE) -o $@ $(N_QUEENS_CPP_SRC)
 
 n_queens: $(N_QUEENS_CPP_BIN)
-	@echo "[make] Running N-Queens GA solver (N=$(n_queens_size)) 10 times"
-	@echo "=========================================" > $(BUILD)/nqueens_$(N_QUEENS_SIZE).out
-	@echo "Teste: N=$(n_queens_size), Algoritmo=Genetico" >> $(BUILD)/nqueens_$(N_QUEENS_SIZE).out
-	@echo "=========================================" >> $(BUILD)/nqueens_$(N_QUEENS_SIZE).out
-	@for i in 1 2 3 4 5 6 7 8 9 10; do \
-		echo "Run $$i:"; \
-		$(N_QUEENS_CPP_BIN); \
-	done | tee -a $(BUILD)/nqueens_$(N_QUEENS_SIZE).out | awk '/Tempo/ {for (j=1; j<=NF; j++) if ($$j == "=") {sum += $$(j+1); count++; break}} END {if (count > 0) print "=========================================\nMédia:", sum/count, "µs\n========================================="}' >> $(BUILD)/nqueens_$(N_QUEENS_SIZE).out
+	$(call run_bench,$(N_QUEENS_CPP_BIN),$(N_QUEENS_LOG),N-Queens GA (C++) — N=$(N_QUEENS_SIZE))
 
+n_queens_regression: | $(BUILD)
+	@{ \
+	  printf "=========================================\n"; \
+	  printf " Regressão N-Queens GA (C++)\n"; \
+	  printf " N=%d..%d | %d runs por tamanho\n" "$(N_MIN)" "$(N_MAX)" "$(RUNS)"; \
+	  printf " Data: %s\n" "$$(date '+%Y-%m-%d %H:%M:%S')"; \
+	  printf "=========================================\n\n"; \
+	  printf "%-4s  %-8s  %12s  %12s  %12s\n" \
+	         "N" "Status" "Mín (µs)" "Máx (µs)" "Média (µs)"; \
+	  printf "%-4s  %-8s  %12s  %12s  %12s\n" \
+	         "----" "--------" "------------" "------------" "------------"; \
+	  for n in $$(seq $(N_MIN) $(N_MAX)); do \
+	    bin="$(BUILD)/nqueens_reg_$$n"; \
+	    if ! $(CXX) $(CXXFLAGS) -DN=$$n -o "$$bin" $(N_QUEENS_CPP_SRC) 2>/tmp/nq_err_$$n; then \
+	      printf "%-4d  %-8s  (erro de compilação)\n" "$$n" "ERRO"; \
+	      continue; \
+	    fi; \
+	    min_us=9999999999; max_us=0; sum_us=0; ok=0; status="OK"; \
+	    for i in $$(seq 1 $(RUNS)); do \
+	      output=$$($$bin 2>/dev/null); \
+	      us=$$(echo "$$output" | awk '/Tempo/ { for(j=1;j<=NF;j++) if($$j=="="){print $$(j+1);exit} }'); \
+	      if [ -z "$$us" ]; then status="SEM_SOL"; continue; fi; \
+	      [ "$$us" -lt "$$min_us" ] && min_us=$$us; \
+	      [ "$$us" -gt "$$max_us" ] && max_us=$$us; \
+	      sum_us=$$((sum_us + us)); \
+	      ok=$$((ok + 1)); \
+	    done; \
+	    if [ "$$ok" -gt 0 ]; then \
+	      avg_us=$$((sum_us / ok)); \
+	      printf "%-4d  %-8s  %12d  %12d  %12d\n" \
+	             "$$n" "$$status" "$$min_us" "$$max_us" "$$avg_us"; \
+	    else \
+	      printf "%-4d  %-8s  (sem solução em $(RUNS) runs)\n" "$$n" "$$status"; \
+	    fi; \
+	  done; \
+	  printf "\n=========================================\n"; \
+	  printf " Log salvo em: $(N_QUEENS_REG_LOG)\n"; \
+	  printf "=========================================\n"; \
+	} 2>&1 | tee $(N_QUEENS_REG_LOG)
+
+# --- N-Queens: simulação Verilog --------------------------------------------
 $(N_QUEENS_SIMV): $(N_QUEENS_SV_SRCS) $(N_QUEENS_TB_SRC) | $(BUILD)
-	@echo "[make] Compiling N-Queens SystemVerilog sources with $(IVERILOG) (N=$(N_QUEENS_SIZE))"
+	@echo "[make] Compilando N-Queens SystemVerilog (N=$(N_QUEENS_SIZE))"
 	$(IVERILOG) $(IVERILOG_FLAGS) -DN=$(N_QUEENS_SIZE) -o $@ $(N_QUEENS_SV_SRCS) $(N_QUEENS_TB_SRC)
 
 n_queens_sv: $(N_QUEENS_SIMV)
-	@echo "[make] Running N-Queens SystemVerilog simulation (output/log in $(BUILD)/)"
-	$(VVP) $(N_QUEENS_SIMV) | tee $(BUILD)/n_queens_sim_$(N_QUEENS_SIZE).out
-	@if [ -f "n_queens_waves.vcd" ]; then \
-		mv n_queens_waves.vcd $(N_QUEENS_VCD); \
-		echo "[make] VCD saved to $(N_QUEENS_VCD)"; \
-	fi
+	@echo "[make] Simulando N-Queens Verilog (N=$(N_QUEENS_SIZE))"
+	$(VVP) $(N_QUEENS_SIMV) | tee $(BUILD)/n_queens_sim_n$(N_QUEENS_SIZE).out
+	@if [ -f "n_queens_waves.vcd" ]; then mv n_queens_waves.vcd $(N_QUEENS_VCD); fi
+
+# --- Simplex: C++ -----------------------------------------------------------
+$(SIMPLEX_CPP_BIN): $(SIMPLEX_CPP_SRC) | $(BUILD)
+	@echo "[make] Compilando Simplex C++ (M=$(SIMPLEX_M), N=$(SIMPLEX_N))"
+	$(CXX) $(CXXFLAGS) -DSIMPLEX_M=$(SIMPLEX_M) -DSIMPLEX_N=$(SIMPLEX_N) -o $@ $(SIMPLEX_CPP_SRC)
+
+simplex: $(SIMPLEX_CPP_BIN)
+	$(call run_bench,$(SIMPLEX_CPP_BIN),$(BUILD)/simplex_$(SIMPLEX_M)x$(SIMPLEX_N)_r$(RUNS).log,Simplex (C++) — M=$(SIMPLEX_M) N=$(SIMPLEX_N))
 
 run: verilog
 
-wave: $(SIMV)
-	@echo "[make] Running simulation and attempting to open waveform"
-	$(VVP) $(SIMV) | tee $(BUILD)/sim_$(BITS).out
-	@# Move o arquivo gerado na raiz para a pasta build
-	@if [ -f "one_max_waves.vcd" ]; then \
-		mv one_max_waves.vcd $(VCD); \
-	fi
-	@if [ -f "$(VCD)" ]; then \
-		if command -v $(GTKWAVE) >/dev/null 2>&1; then \
-			$(GTKWAVE) $(VCD); \
-		else \
-			echo "[make] gtkwave not found — VCD available at $(VCD)"; \
-		fi \
-	else \
-		echo "[make] No VCD found at $(VCD). Ensure your testbench writes to it."; \
-	fi
-
+# --- Limpeza ----------------------------------------------------------------
 clean:
-	@echo "[make] Cleaning build artifacts"
-	@rm -rf $(BUILD) one_max_waves.vcd
+	@echo "[make] Removendo artefatos de build"
+	@rm -rf $(BUILD) one_max_waves.vcd n_queens_waves.vcd
 
+# --- Ajuda ------------------------------------------------------------------
 help:
-	@echo "Makefile targets:"
-	@echo "  make verilog BITS=<n>          : compile+run SystemVerilog testbench (one_max)"
-	@echo "  make one_max bits=<n>          : compile+run one_max C++ solver (single-core)"
-	@echo "  make one_max bits=<n> threads=1 : compile+run one_max C++ solver (multi-core (all cores))"
-	@echo "  make one_max bits=<n> threads=<num> : compile+run one_max C++ solver (with <num> threads)"
-	@echo "  make simplex simplex_m=<m> simplex_n=<n> : compile+run simplex C++ solver (10 runs with log)"
-	@echo "  make n_queens n_queens_size=<n> : compile+run N-Queens Genetic Algorithm solver (default N=8, 10 runs with log)"
-	@echo "  make n_queens_sv n_queens_size=<n> : compile+run N-Queens SystemVerilog simulation (default N=8)"
-	@echo "  make wave BITS=<n>             : run verilog and open VCD with gtkwave"
-	@echo "  make clean                     : remove build directory"
+	@echo ""
+	@echo "Uso: make <target> [parâmetros]"
+	@echo ""
+	@echo "Parâmetros disponíveis:"
+	@echo "  bits=<N>             Tamanho do vetor OneMax       (padrão: 1024)"
+	@echo "  runs=<N>             Número de execuções           (padrão: 10)"
+	@echo "  n_queens_size=<N>    Tabuleiro N-Queens            (padrão: 8)"
+	@echo "  n_min=<N>            N mínimo da regressão         (padrão: 4)"
+	@echo "  n_max=<N>            N máximo da regressão         (padrão: 15)"
+	@echo "  threads=<N>          Threads para OneMax           (padrão: 1)"
+	@echo "  simplex_m=<M>        Linhas do Simplex             (padrão: 3)"
+	@echo "  simplex_n=<N>        Colunas do Simplex            (padrão: 2)"
+	@echo ""
+	@echo "Targets:"
+	@echo "  one_max              Compila e roda OneMax C++"
+	@echo "  n_queens             Compila e roda N-Queens GA C++ (um N)"
+	@echo "  n_queens_regression  Roda N-Queens para N=n_min..n_max (todos os tamanhos)"
+	@echo "  n_queens_sv          Simula N-Queens em SystemVerilog"
+	@echo "  verilog              Simula OneMax em SystemVerilog"
+	@echo "  wave                 Simula OneMax e abre GTKWave"
+	@echo "  simplex              Compila e roda Simplex C++"
+	@echo "  clean                Remove o diretório build/"
+	@echo ""
+	@echo "Exemplos:"
+	@echo "  make one_max bits=1024 runs=20"
+	@echo "  make n_queens n_queens_size=12 runs=5"
+	@echo "  make n_queens_regression n_min=4 n_max=12 runs=10"
+	@echo "  make n_queens_sv n_queens_size=8"

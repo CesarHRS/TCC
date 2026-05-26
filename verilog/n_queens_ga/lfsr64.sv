@@ -1,5 +1,5 @@
 // LFSR de 64 bits — polinômio x^64 + x^63 + x^61 + x^60 + 1
-// Taps nos bits 63, 62, 60, 59. Idêntico ao LFSR64 do software (cpp/n_queens/lfsr64.h).
+// Taps nos bits 63, 62, 60, 59. Idêntico ao LFSR64 do software (cpp/n_queens_ga/lfsr64.h).
 // Semente fixa 0xDEADBEEFCAFEBABE em reset, igual ao C++.
 //
 // Cada ciclo com `enable` alto produz um novo estado (shift left + novo bit no LSB).

@@ -2,7 +2,7 @@
 #include <cstdint>
 
 // LFSR de 64 bits com polinômio x^64 + x^63 + x^61 + x^60 + 1
-// Taps nos bits 63, 62, 60, 59 — idêntico ao hardware (verilog/n_queens/lfsr64.sv).
+// Taps nos bits 63, 62, 60, 59 — idêntico ao hardware (verilog/n_queens_ga/lfsr64.sv).
 // Shift para a esquerda: novo bit entra no LSB.
 class LFSR64 {
     uint64_t st;
