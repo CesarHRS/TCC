@@ -54,15 +54,17 @@ int main(int argc, char **argv) {
     }
 
     auto end_time = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double, std::micro> elapsed = end_time - start_time;
+    int64_t elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
+                          end_time - start_time).count();
 
-    std::cout << "Tempo = " << elapsed.count() << " µs" << std::endl;
+    std::cout << "Tempo = " << elapsed << " µs" << std::endl;
 #else
     auto start_time = std::chrono::high_resolution_clock::now();
     DynBits best = run_hill_climbing();
     auto end_time = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double, std::micro> elapsed = end_time - start_time;
-    std::cout << "Tempo = " << elapsed.count() << " µs" << std::endl;
+    int64_t elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
+                          end_time - start_time).count();
+    std::cout << "Tempo = " << elapsed << " µs" << std::endl;
 #endif
 
     return 0;
